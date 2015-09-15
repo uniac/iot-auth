@@ -1,0 +1,7 @@
+all: verifier-firmware
+CONTIKI=../../..
+
+include $(CONTIKI)/Makefile.include
+
+# CONTIKI_SOURCEFILES += sha2.c hmac_sha2.c
+
