@@ -68,35 +68,40 @@ initialize_message(unsigned char* wholeMessage, long currentTime,
     unsigned char finalSum[10] = {0x00};
     bn_write_bin(finalSum, 10, final_sum);
 
-    memcpy(wholeMessage+112,  finalSum,     10);
+    memcpy(wholeMessage+48,  finalSum,     10);
 
-    unsigned char message[64];
-    randomCharArray(message, 64);
+    unsigned char message[MSG_LENGTH];
+    randomCharArray(message, MSG_LENGTH);
 
     unsigned char tmi[4];
     longToBytes(tmi, currentTime);
-    memcpy(wholeMessage+122,  tmi,          4);
+    memcpy(wholeMessage+58,  tmi,          4);
 
-    const unsigned char macInput[96];
+    const unsigned char macInput[32 + MSG_LENGTH];
     memcpy(macInput,      IDc,          8);
     memcpy(macInput+8,    IDv,          8);
-    memcpy(macInput+16,   message,      64);
-    memcpy(macInput+80,   g_bytes,      2);
-    memcpy(macInput+82,   finalSum,     10);
-    memcpy(macInput+92,   tmi,          4);
+    memcpy(macInput+16,   g_bytes,      2);
+    memcpy(macInput+18,   finalSum,     10);
+    memcpy(macInput+28,   tmi,          4);
+    memcpy(macInput+32,   message,      MSG_LENGTH);
 
     unsigned char mac[16];
-    hmac_sha256(secret_bytes, 10, macInput, 96, mac, 16);
+    hmac_sha256(secret_bytes, 10, macInput, 32 + MSG_LENGTH, mac, 16);
 
   ////////////////////////////////////////////////////////////////
   /////      STEP 2 MESSAGE AUTHENTICATION INITIATION        /////
   ////////////////////////////////////////////////////////////////
 
     memcpy(wholeMessage,      IDc,          8);
-    memcpy(wholeMessage+8,    IDv,          8); // sa copied above
-    memcpy(wholeMessage+48,   message,      64);
-    memcpy(wholeMessage+126,  mac,          16);
-    memcpy(wholeMessage+142,  g_bytes,      2);
+    memcpy(wholeMessage+8,    IDv,          8); // sa, finalSum and tmi copied above
+    memcpy(wholeMessage+62,   mac,          16);
+    memcpy(wholeMessage+78,   g_bytes,      2);
+    memcpy(wholeMessage+80,   message,      MSG_LENGTH);
+
+    int x;
+    for(x = 0; x < 28; x++) {
+      // printf("%i %u %u %u %u \n", x, wholeMessage[4*x], wholeMessage[4*x+1], wholeMessage[4*x+2], wholeMessage[4*x+3]);
+    }
 
     // printf("message = %u %u %u %u \n", message[0], message[1], message[62], message[63]);
     // printf("final sum = %u %u %u %u \n", finalSum[0], finalSum[1], finalSum[8], finalSum[9]);
@@ -130,14 +135,15 @@ PROCESS_THREAD(claimer_process, ev, data)
   PROCESS_BEGIN();
   // powertrace_start(CLOCK_SECOND * 2);
 
-  core_init();
-
-  broadcast_open(&broadcast, 129, &broadcast_call);
-  printf("starting process \n");
-
   //////////////////////////////////////////////////////////////////
   ////////          STEP 1  INITIALIZATION                 /////////
   //////////////////////////////////////////////////////////////////
+
+  start = clock_time();
+
+  core_init();
+
+  broadcast_open(&broadcast, 129, &broadcast_call);
 
   bn_null(s);
   bn_new(s);
@@ -149,34 +155,32 @@ PROCESS_THREAD(claimer_process, ev, data)
   randomCharArray(IDc, 8);
   randomCharArray(IDv, 8);
 
+  stop = clock_time();
+
+  // printf("claimer init time = %lu \n", stop - start);
+
   while(1) {
 
     long currentTime = clock_time();
     etimer_set(&et, T[messageNum] - currentTime);
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 
-      static unsigned char message[144];
-      initialize_message(message, T[messageNum], &r_bytes[messageNum*10], IDc, IDv);
+    start = clock_time();
 
-      packetbuf_clear();
+    static unsigned char message[80 + MSG_LENGTH];
 
-      // there seems to be a maximum buffer size of about 110 bytes
-      packetbuf_copyfrom(&message[0], 48);
-      broadcast_send(&broadcast);
+    // printf("initializing message %i at time %lu \n", messageNum, start);
 
-      packetbuf_clear();
+    initialize_message(message, T[messageNum], &r_bytes[messageNum*10], IDc, IDv);
 
-      etimer_set(&et, CLOCK_SECOND);
-      PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
+    packetbuf_clear();
 
-      // printf("tmi from wholeMessage = %u %u %u %u \n", message[122], message[123], message[124], message[125]);
+    packetbuf_copyfrom(&message[0], 80+MSG_LENGTH); // there seems to be a maximum buffer size of about 110 bytes
 
-      packetbuf_copyfrom(&message[48], 96);
-      broadcast_send(&broadcast);
+    printf("sending msg at time %lu \n", start);
+    broadcast_send(&broadcast);
 
-      printf("sending msg %i \n", messageNum);
-
-      messageNum++;
+    messageNum++;
 
     if(messageNum == NUM_MSGS) {
       break;

@@ -1,5 +1,7 @@
 #include <relic.h>
 
+#define MSG_LENGTH 16
+
 const static unsigned char secret_bytes[10] = {0xE9, 0xC4, 0x89, 0xCD, 0xCD, 0xD6, 0xB7, 0xC3, 0xA5, 0x58};
 static bn_t s;
 
@@ -9,7 +11,7 @@ static int betweenBroadcasts = 0; // since the broadcast is in 2 parts
 static unsigned char IDc[8];
 static unsigned char IDv[8];
 static unsigned char sa[32];
-static unsigned char message[64];
+static unsigned char message[MSG_LENGTH];
 static unsigned char tmiBytes[4];
 static unsigned char giBytes[2];
 static unsigned char finalSum[10];
@@ -17,6 +19,10 @@ static unsigned char finalSums[100];
 static long tmi;
 static unsigned char mac[16];
 static int gi;
+
+static int x;
+
+static long start, stop;
 
 static bn_t s;
 

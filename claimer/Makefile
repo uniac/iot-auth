@@ -3,7 +3,7 @@ APPS+=powertrace
 all: claimer-firmware-shamir
 
 RELIC_SOURCE = /home/user/Desktop/relic-0.4.0
-RELIC_TARGET = /home/user/Desktop/relic-target-4
+RELIC_TARGET = /home/user/Desktop/relic-target-4-s256
 CFLAGS += -l$(RELIC_SOURCE)/include -l$(RELIC_TARGET)/include -Os
 CFLAGS += -I$(RELIC_SOURCE)/include -I$(RELIC_TARGET)/include -Os
 CFLAGS += -I/usr/msp430/include -Os

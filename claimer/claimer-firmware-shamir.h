@@ -1,9 +1,12 @@
 #include <relic.h>
 
-#define NUM_MSGS 6
+#define NUM_MSGS 5
+#define MSG_LENGTH 16
 
 const static unsigned char secret_bytes[10] = {0xE9, 0xC4, 0x89, 0xCD, 0xCD, 0xD6, 0xB7, 0xC3, 0xA5, 0x58};
 static bn_t s;
+
+static long start, stop;
 
 // random bytes reserved for G
 const static unsigned char G[20] = {

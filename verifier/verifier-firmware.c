@@ -12,7 +12,6 @@
 #include <stdio.h>
 #include <string.h>
 
-
 static void sendMsg(char* m, int len) {
   packetbuf_clear();
   packetbuf_copyfrom(m, len);
@@ -43,28 +42,24 @@ AUTOSTART_PROCESSES(&verifier_process);
 static void
 broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from)
 {
-  if(betweenBroadcasts == 0) {
-    unsigned char* wholeMessage = (unsigned char*) packetbuf_dataptr();
-
-    copyToArray(wholeMessage, IDc,     0,  8);
-    copyToArray(wholeMessage, IDv,     8,  16);
-    copyToArray(wholeMessage, sa,      16, 48);
-
-    // printf("IDc received = %u%u%u%u \n", IDc[0], IDc[1], IDc[2], IDc[3]);
-    // printf("IDv received = %u%u%u%u \n", IDv[0], IDv[1], IDv[2], IDv[3]);    
-
-    betweenBroadcasts = 1;
-
-  } else {
-
-    unsigned char* wholeMessage = (unsigned char*) packetbuf_dataptr();
-
-    copyToArray(wholeMessage, message,  0,  64);
-    copyToArray(wholeMessage, finalSum, 64, 74);
-    copyToArray(wholeMessage, tmiBytes, 74, 78);
-    copyToArray(wholeMessage, mac,      78, 94);
-    copyToArray(wholeMessage, giBytes,  94, 96);
+    printf("received msg at time %lu \n", clock_time());
     
+    unsigned char* wholeMessage = (unsigned char*) packetbuf_dataptr();
+
+    copyToArray(wholeMessage, IDc,      0,  8);
+    copyToArray(wholeMessage, IDv,      8,  16);
+    copyToArray(wholeMessage, sa,       16, 48);
+    copyToArray(wholeMessage, finalSum, 48, 58);
+    copyToArray(wholeMessage, tmiBytes, 58, 62);
+    copyToArray(wholeMessage, mac,      62, 78);
+    copyToArray(wholeMessage, giBytes,  78, 80);
+    copyToArray(wholeMessage, message,  80, 80 + MSG_LENGTH);
+
+    for(x = 0; x < 24; x++) {
+        // printf("%i %u %u %u %u \n", x+12, wholeMessage[4*x], wholeMessage[4*x+1], wholeMessage[4*x+2], wholeMessage[4*x+3]);
+    }
+
+
     bn_t final_sum, g;
 
     bn_null(final_sum);
@@ -85,6 +80,8 @@ broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from)
 
     tmi = bytesToLong(tmiBytes);
 
+    printf("tmi received = %lu, bytes = %u %u \n", tmi, tmiBytes[2], tmiBytes[3]);
+
     // printf("time received = %lu \n", tmi);
 
     ///////////////////////////////////////////////////////////////
@@ -92,7 +89,7 @@ broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from)
     ///////////////////////////////////////////////////////////////
 
     long currentTime = clock_time();
-    if(currentTime < tmi - 300 || currentTime > tmi + 300) {
+    if(currentTime < tmi || currentTime > tmi + 800) {
       printf("sending tm-neg \n");
       sendMsg("tm-neg", 7);
       return;
@@ -123,16 +120,16 @@ broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from)
     //////////             VERIFICATION V-2          //////////////
     ///////////////////////////////////////////////////////////////
 
-    const unsigned char macInput[96];
+    const unsigned char macInput[32 + MSG_LENGTH];
     memcpy(macInput,      IDc,          8);
     memcpy(macInput+8,    IDv,          8);
-    memcpy(macInput+16,   message,      64);
-    memcpy(macInput+80,   giBytes,      2);
-    memcpy(macInput+82,   finalSum,     10);
-    memcpy(macInput+92,   tmiBytes,     4);
+    memcpy(macInput+16,   giBytes,      2);
+    memcpy(macInput+18,   finalSum,     10);
+    memcpy(macInput+28,   tmiBytes,     4);
+    memcpy(macInput+32,   message,      MSG_LENGTH);
 
     unsigned char freshMac[16];
-    hmac_sha256(secret_bytes, 10, macInput, 96, freshMac, 16);
+    hmac_sha256(secret_bytes, 10, macInput, 32 + MSG_LENGTH, freshMac, 16);
 
     for(i = 0; i < 16; i++) {
       if(freshMac[i] != mac[i]) {
@@ -176,7 +173,7 @@ broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from)
         // printf("%u     %u \n", freshSA[i], sa[i]);
       if(fresh_sa[i] != sa[i]) {
         sendMsg("sa-neg", 6);
-        printf("sending sa-neg \n");
+        // printf("sending sa-neg \n");
         return;
       }
     }
@@ -185,9 +182,10 @@ broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from)
     printf("VO pos for message %i \n", msgNum);
 
     betweenBroadcasts = 0;
-    msgNum++;
-  }
+    stop = clock_time();
+    // printf("msg %i verification %lu \n", msgNum, stop - start);
 
+    msgNum++;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -203,7 +201,7 @@ PROCESS_THREAD(verifier_process, ev, data)
   bn_null(s);
   bn_new(s);
   bn_read_bin(s, secret_bytes, 10);
-
+  
   broadcast_open(&broadcast, 129, &broadcast_call);
 
   // simply open the broadcast channel and end the main process 
