@@ -42,8 +42,8 @@ AUTOSTART_PROCESSES(&verifier_process);
 static void
 broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from)
 {
-    printf("received msg at time %lu \n", clock_time());
-    
+    printf("message received \n");
+
     unsigned char* wholeMessage = (unsigned char*) packetbuf_dataptr();
 
     copyToArray(wholeMessage, IDc,      0,  8);
@@ -55,9 +55,9 @@ broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from)
     copyToArray(wholeMessage, giBytes,  78, 80);
     copyToArray(wholeMessage, message,  80, 80 + MSG_LENGTH);
 
-    for(x = 0; x < 24; x++) {
-        // printf("%i %u %u %u %u \n", x+12, wholeMessage[4*x], wholeMessage[4*x+1], wholeMessage[4*x+2], wholeMessage[4*x+3]);
-    }
+    // for(x = 0; x < 24; x++) {
+    //     printf("%i %u %u %u %u \n", x+12, wholeMessage[4*x], wholeMessage[4*x+1], wholeMessage[4*x+2], wholeMessage[4*x+3]);
+    // }
 
 
     bn_t final_sum, g;
@@ -80,7 +80,7 @@ broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from)
 
     tmi = bytesToLong(tmiBytes);
 
-    printf("tmi received = %lu, bytes = %u %u \n", tmi, tmiBytes[2], tmiBytes[3]);
+    // printf("tmi received = %lu, bytes = %u %u \n", tmi, tmiBytes[2], tmiBytes[3]);
 
     // printf("time received = %lu \n", tmi);
 
@@ -89,7 +89,7 @@ broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from)
     ///////////////////////////////////////////////////////////////
 
     long currentTime = clock_time();
-    if(currentTime < tmi || currentTime > tmi + 800) {
+    if(currentTime < tmi - time_window || currentTime > tmi + time_window) {
       printf("sending tm-neg \n");
       sendMsg("tm-neg", 7);
       return;
@@ -127,6 +127,10 @@ broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from)
     memcpy(macInput+18,   finalSum,     10);
     memcpy(macInput+28,   tmiBytes,     4);
     memcpy(macInput+32,   message,      MSG_LENGTH);
+
+    // for(x = 0; x < 10; x++) {
+    //     printf("%i %u %u %u %u \n", x, macInput[4*x], macInput[4*x+1], macInput[4*x+2], macInput[4*x+3]);
+    // }
 
     unsigned char freshMac[16];
     hmac_sha256(secret_bytes, 10, macInput, 32 + MSG_LENGTH, freshMac, 16);
@@ -191,10 +195,15 @@ broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from)
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(verifier_process, ev, data)
 {
+
+  printf("this is a printf statement \n");
+
   static struct etimer et;
   PROCESS_EXITHANDLER(broadcast_close(&broadcast);)
 
   PROCESS_BEGIN();
+
+  printf("just began process \n");
 
   core_init();
 
@@ -203,6 +212,8 @@ PROCESS_THREAD(verifier_process, ev, data)
   bn_read_bin(s, secret_bytes, 10);
   
   broadcast_open(&broadcast, 129, &broadcast_call);
+
+  printf("test \n");
 
   // simply open the broadcast channel and end the main process 
   // all verifier handling is done in the recv function

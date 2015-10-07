@@ -3,6 +3,7 @@
 #include "lib/random.h"
 #include "sys/clock.h"
 #include "sys/etimer.h"
+#include "sys/rtimer.h"
 #include "claimer-firmware-shamir.h"
 // #include "powertrace.h"
 
@@ -85,6 +86,10 @@ initialize_message(unsigned char* wholeMessage, long currentTime,
     memcpy(macInput+28,   tmi,          4);
     memcpy(macInput+32,   message,      MSG_LENGTH);
 
+    // for(x = 0; x < 10; x++) {
+    //     printf("%i %u %u %u %u \n", x, macInput[4*x], macInput[4*x+1], macInput[4*x+2], macInput[4*x+3]);
+    // }    
+
     unsigned char mac[16];
     hmac_sha256(secret_bytes, 10, macInput, 32 + MSG_LENGTH, mac, 16);
 
@@ -133,13 +138,16 @@ PROCESS_THREAD(claimer_process, ev, data)
   PROCESS_EXITHANDLER(broadcast_close(&broadcast);)
 
   PROCESS_BEGIN();
-  // powertrace_start(CLOCK_SECOND * 2);
+
+  printf("starting claimer process \n");
+
+  printf("RTIMER SECOND = %lu\n", RTIMER_SECOND);
 
   //////////////////////////////////////////////////////////////////
   ////////          STEP 1  INITIALIZATION                 /////////
   //////////////////////////////////////////////////////////////////
 
-  start = clock_time();
+  // powertrace_start(2*CLOCK_SECOND);
 
   core_init();
 
@@ -155,32 +163,24 @@ PROCESS_THREAD(claimer_process, ev, data)
   randomCharArray(IDc, 8);
   randomCharArray(IDv, 8);
 
-  stop = clock_time();
-
-  // printf("claimer init time = %lu \n", stop - start);
-
   while(1) {
 
     long currentTime = clock_time();
     etimer_set(&et, T[messageNum] - currentTime);
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 
-    start = clock_time();
-
     static unsigned char message[80 + MSG_LENGTH];
-
-    // printf("initializing message %i at time %lu \n", messageNum, start);
 
     initialize_message(message, T[messageNum], &r_bytes[messageNum*10], IDc, IDv);
 
     packetbuf_clear();
-
     packetbuf_copyfrom(&message[0], 80+MSG_LENGTH); // there seems to be a maximum buffer size of about 110 bytes
 
-    printf("sending msg at time %lu \n", start);
     broadcast_send(&broadcast);
 
     messageNum++;
+
+    // printf("messageNum is %i \n", messageNum);
 
     if(messageNum == NUM_MSGS) {
       break;
