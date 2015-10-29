@@ -43,6 +43,7 @@ static void
 broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from)
 {
     printf("message received \n");
+    rtimer_clock_t start = rtimer_arch_now();
 
     unsigned char* wholeMessage = (unsigned char*) packetbuf_dataptr();
 
@@ -190,6 +191,8 @@ broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from)
     // printf("msg %i verification %lu \n", msgNum, stop - start);
 
     msgNum++;
+    rtimer_clock_t stop = rtimer_arch_now();
+    printf("ver time = %lu \n", stop - start);
 }
 
 /*---------------------------------------------------------------------------*/
